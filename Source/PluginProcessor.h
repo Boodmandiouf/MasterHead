@@ -13,6 +13,7 @@ namespace ids
     constexpr const char* compOn   = "compOn";
     constexpr const char* glue     = "glue";
     constexpr const char* detail   = "detail";
+    constexpr const char* compOut  = "compOut";
     constexpr const char* analogOn = "analogOn";
     constexpr const char* sat      = "sat";
     constexpr const char* stereoOn = "stereoOn";
@@ -81,6 +82,7 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     Meters meters;
     double getSr() const { return sr; }
+    int editorW = 0, editorH = 0;   // taille de fenêtre mémorisée (thread message uniquement)
     void resetIntegrated() { meters.resetI.store (true); }
 
     // ---- A/B
@@ -122,7 +124,7 @@ private:
     {
         std::atomic<float> *in, *specOn, *spec, *compOn, *glue, *detail, *analogOn, *sat, *stereoOn, *width,
                            *bassOn, *bassHz, *eqOn, *low, *high, *clipOn, *clip, *limOn, *push, *tp,
-                           *bypass, *target, *monitor;
+                           *bypass, *target, *monitor, *compOut;
     } prm {};
 
     double sr = 44100.0;
@@ -137,6 +139,7 @@ private:
     Crossover3 xo[2];
     float bFast[3] {}, bMed[3] {}, bSlow[3] {}, bGr[3] {}, bUp[3] {};
     float cPe = 0.f, cPm = 0.f, cSlowAtk = 0.f, cSlowRel = 0.f, cAtk[3] {}, cRel[3] {}, cUpAtk = 0.f, cUpRel = 0.f;
+    float makeupDb = 0.f, cMk = 0.f;   // Comp Out : compensation automatique du gain de réduction
 
     // EQ (Bass / Air)
     juce::dsp::IIR::Filter<float> lowShelf[2], highShelf[2];

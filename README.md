@@ -16,6 +16,8 @@ Plugin VST3 d'aide au mastering (effet stéréo, à poser sur le master bus), or
 Barre du bas : Monitor (None / Mid / Side / Delta), spectre, LUFS S, LUFS I (clic sur le picto = reset),
 PEAK (clic = reset), DYNAMICS (crête récente - LUFS S), STEREO.
 Barre du haut : Input + vu-mètre, UNDO / REDO, A / B / A→B, Bypass (compensé en latence).
+Fenêtre **redimensionnable librement** : tout le contenu s'adapte à la taille (la taille est mémorisée dans le projet).
+Bouton **Comp Out** (à droite du Comp) : compense automatiquement le gain perdu par le compresseur.
 Gros bouton rond : **ASSIST** (choisis la cible puis laisse jouer 10 s la partie la plus forte).
 
 ## Compiler

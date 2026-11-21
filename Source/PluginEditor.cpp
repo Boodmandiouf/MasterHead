@@ -96,6 +96,22 @@ void AssistButton::paintButton (juce::Graphics& g, bool over, bool down)
     g.drawText (getButtonText(), in.toNearestInt(), juce::Justification::centred);
 }
 
+void CompOutButton::paintButton (juce::Graphics& g, bool over, bool)
+{
+    auto b = getLocalBounds().toFloat();
+    g.setColour (col::dim);
+    g.setFont (11.f);
+    g.drawFittedText ("Comp\nOut", b.removeFromTop (28.f).toNearestInt(), juce::Justification::centred, 2);
+    const float d = 26.f;
+    const auto r = juce::Rectangle<float> (d, d).withCentre (b.getCentre());
+    const bool on = getToggleState();
+    g.setColour (on ? col::comp : (over ? juce::Colour (0xff4a4f5c) : col::track));
+    g.fillEllipse (r);
+    g.setColour (on ? juce::Colours::white : col::dim);
+    g.drawLine (r.getCentreX() - 6.f, r.getCentreY(), r.getCentreX() + 6.f, r.getCentreY(), 2.f);
+    g.drawLine (r.getCentreX(), r.getCentreY() - 6.f, r.getCentreX(), r.getCentreY() + 6.f, 2.f);
+}
+
 void InputMeter::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat().reduced (0.f, 4.f);
@@ -295,8 +311,8 @@ void MonitorBar::paint (juce::Graphics& g)
         juce::Path arc;  arc.addCentredArc (ic.getCentreX(), ic.getCentreY(), 4.5f, 4.5f, 0.f, 0.6f, 5.7f, true);
         g.strokePath (arc, juce::PathStrokeType (1.6f));
         const float v = data.lufsI;
-        value (c[2].withTrimmedTop (14).withTrimmedBottom (12), fmt (v, -70.f));
-        if (v > -70.f) { if (v > -8.f) verdict (c[2], "LOUD", col::warn); else if (v < -20.f) verdict (c[2], "QUIET", col::dim); else verdict (c[2], "GOOD", col::good); }
+        value (c[3].withTrimmedTop (14).withTrimmedBottom (12), fmt (v, -70.f));
+        if (v > -70.f) { if (v > -8.f) verdict (c[3], "LOUD", col::warn); else if (v < -20.f) verdict (c[3], "QUIET", col::dim); else verdict (c[3], "GOOD", col::good); }
     }
 
     // 4 : PEAK
@@ -374,16 +390,16 @@ void MasterHeadEditor::setupKnob (Knob& k, const char* id, const juce::String& n
         kp->value.setText (t, juce::dontSendNotification);
     };
 
-    addAndMakeVisible (k.slider);
-    addAndMakeVisible (k.name);
-    addAndMakeVisible (k.value);
+    canvas.addAndMakeVisible (k.slider);
+    canvas.addAndMakeVisible (k.name);
+    canvas.addAndMakeVisible (k.value);
     k.att = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, id, k.slider);
     k.slider.onValueChange();
 }
 
 void MasterHeadEditor::setupLed (Led& l, const char* id)
 {
-    addAndMakeVisible (l.button);
+    canvas.addAndMakeVisible (l.button);
     l.att = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, id, l.button);
 }
 
@@ -422,21 +438,21 @@ MasterHeadEditor::MasterHeadEditor (MasterHeadProcessor& p)
     setupLed (lStereo, ids::stereoOn); setupLed (lEq, ids::eqOn);       setupLed (lClip, ids::clipOn);
     setupLed (lLim, ids::limOn);
 
-    for (auto* b : { &pLM, &pTP, &pBypass }) addAndMakeVisible (*b);
+    for (auto* b : { &pLM, &pTP, &pBypass }) canvas.addAndMakeVisible (*b);
     aLM     = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, ids::bassOn, pLM);
     aTP     = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, ids::tp, pTP);
     aBypass = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, ids::bypass, pBypass);
 
-    for (auto* b : { &undoBtn, &redoBtn }) { b->setLookAndFeel (&lnf); addAndMakeVisible (*b); }
+    for (auto* b : { &undoBtn, &redoBtn }) { b->setLookAndFeel (&lnf); canvas.addAndMakeVisible (*b); }
     undoBtn.onClick = [this] { proc.undo(); };
     redoBtn.onClick = [this] { proc.redo(); };
 
-    for (auto* b : { &btnA, &btnB, &btnAB }) { b->setLookAndFeel (&lnf); addAndMakeVisible (*b); }
+    for (auto* b : { &btnA, &btnB, &btnAB }) { b->setLookAndFeel (&lnf); canvas.addAndMakeVisible (*b); }
     btnA.onClick  = [this] { proc.selectSlot (0); };
     btnB.onClick  = [this] { proc.selectSlot (1); };
     btnAB.onClick = [this] { proc.copyToOtherSlot(); };
 
-    addAndMakeVisible (assistBtn);
+    canvas.addAndMakeVisible (assistBtn);
     assistBtn.setButtonText ("ASSIST");
     assistBtn.onClick = [this]
     {
@@ -446,27 +462,34 @@ MasterHeadEditor::MasterHeadEditor (MasterHeadProcessor& p)
 
     targetBox.setLookAndFeel (&lnf);
     targetBox.addItemList ({ "-14 STREAM", "-11 LOUD", "-9 CLUB" }, 1);
-    addAndMakeVisible (targetBox);
+    canvas.addAndMakeVisible (targetBox);
     aTarget = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, ids::target, targetBox);
 
     monitorBox.setLookAndFeel (&lnf);
     monitorBox.addItemList ({ "None", "Mid", "Side", "Delta" }, 1);
-    addAndMakeVisible (monitorBox);
+    canvas.addAndMakeVisible (monitorBox);
     aMonitor = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, ids::monitor, monitorBox);
 
     summary.setFont (juce::Font (juce::FontOptions (11.f)));
     summary.setColour (juce::Label::textColourId, col::dim);
     summary.setJustificationType (juce::Justification::topLeft);
     summary.setMinimumHorizontalScale (1.0f);
-    addAndMakeVisible (summary);
+    canvas.addAndMakeVisible (summary);
 
     for (juce::Component* c : { (juce::Component*) &inMeter, (juce::Component*) &curve, (juce::Component*) &compBars,
                                 (juce::Component*) &detailBar, (juce::Component*) &clipBar, (juce::Component*) &limBar,
                                 (juce::Component*) &analogLeds, (juce::Component*) &stereoIcon, (juce::Component*) &monitorBar })
-        addAndMakeVisible (*c);
+        canvas.addAndMakeVisible (*c);
     monitorBar.toBack();   // les widgets (Mix, Monitor) se posent par-dessus
 
-    setSize (800, 806);
+    aCompOut = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, ids::compOut, compOutBtn);
+    canvas.addAndMakeVisible (compOutBtn);
+
+    addAndMakeVisible (canvas);
+    setResizable (true, true);
+    setResizeLimits (480, 484, 2400, 2420);
+    setSize (proc.editorW >= 480 && proc.editorH >= 484 ? proc.editorW : kBaseW,
+             proc.editorW >= 480 && proc.editorH >= 484 ? proc.editorH : kBaseH);
     startTimerHz (30);
 }
 
@@ -565,11 +588,23 @@ void MasterHeadEditor::drawPanel (juce::Graphics& g, juce::Rectangle<int> r, con
 
 void MasterHeadEditor::paint (juce::Graphics& g)
 {
+    // Fond + bandes du haut sur toute la largeur (la toile centrale est mise à l'échelle par-dessus)
+    g.fillAll (col::bg);
+    const float s = juce::jmin ((float) getWidth() / (float) kBaseW, (float) getHeight() / (float) kBaseH);
+    const float oy = ((float) getHeight() - (float) kBaseH * s) * 0.5f;
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2b2154), 0.f, oy + 48.f * s, col::bg, 0.f, oy + 156.f * s, false));
+    g.fillRect (0.f, oy + 48.f * s, (float) getWidth(), 108.f * s);
+    g.setColour (juce::Colour (0xff0f0e14));
+    g.fillRect (0.f, 0.f, (float) getWidth(), oy + 48.f * s);
+}
+
+void MasterHeadEditor::paintCanvas (juce::Graphics& g)
+{
     g.fillAll (col::bg);
     g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2b2154), 0.f, 48.f, col::bg, 0.f, 156.f, false));
-    g.fillRect (0, 48, getWidth(), 108);
+    g.fillRect (0, 48, kBaseW, 108);
     g.setColour (juce::Colour (0xff0f0e14));
-    g.fillRect (0, 0, getWidth(), 48);
+    g.fillRect (0, 0, kBaseW, 48);
 
     g.setColour (col::text);
     g.setFont (juce::Font (juce::FontOptions (40.f, juce::Font::bold | juce::Font::italic)));
@@ -587,9 +622,9 @@ void MasterHeadEditor::paint (juce::Graphics& g)
     drawPanel (g, rLim,    "LIMITER",  col::limiter);
 }
 
-void MasterHeadEditor::resized()
+void MasterHeadEditor::layoutCanvas()
 {
-    const int W = getWidth(), pad = 12;
+    const int W = kBaseW, pad = 12;
 
     // Barre du haut
     kIn.slider.setBounds (8, 6, 36, 36);
@@ -629,6 +664,7 @@ void MasterHeadEditor::resized()
     // Comp
     placeKnob (kGlue, { rComp.getX() + 130, rComp.getY() + 6, 130, rComp.getHeight() - 10 }, 70);
     compBars.setBounds (rComp.getX() + 300, rComp.getY() + 14, 64, rComp.getHeight() - 24);
+    compOutBtn.setBounds (rComp.getRight() - 72, rComp.getY() + 20, 60, 72);
     detailBar.setBounds (rComp.getRight() - 256, rComp.getY() + 14, 14, rComp.getHeight() - 40);
     placeKnob (kDetail, { rComp.getRight() - 224, rComp.getY() + 6, 130, rComp.getHeight() - 10 }, 70);
 
@@ -658,4 +694,14 @@ void MasterHeadEditor::resized()
         const auto c0 = cells[0].translated (barB.getX(), barB.getY());
         monitorBox.setBounds (c0.getX() + 6, c0.getY() + 30, c0.getWidth() - 12, 28);
     }
+}
+
+void MasterHeadEditor::resized()
+{
+    const float s = juce::jmin ((float) getWidth() / (float) kBaseW, (float) getHeight() / (float) kBaseH);
+    canvas.setBounds (0, 0, kBaseW, kBaseH);
+    canvas.setTransform (juce::AffineTransform::scale (s)
+                             .translated (((float) getWidth()  - (float) kBaseW * s) * 0.5f,
+                                          ((float) getHeight() - (float) kBaseH * s) * 0.5f));
+    if (getWidth() > 0 && getHeight() > 0) { proc.editorW = getWidth(); proc.editorH = getHeight(); }
 }

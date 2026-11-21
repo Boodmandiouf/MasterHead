@@ -35,6 +35,8 @@ target_compile_definitions(MasterHead PUBLIC
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0)
 
+target_compile_options(MasterHead PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
+
 target_link_libraries(MasterHead
     PRIVATE
         juce::juce_audio_utils

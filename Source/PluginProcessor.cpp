@@ -58,6 +58,7 @@ APVTS::ParameterLayout MasterHeadProcessor::createLayout()
     bol (ids::compOn, "Comp On", true);
     flt (ids::glue,   "Glue",   0.f, 100.f, 1.f, 0.f);
     flt (ids::detail, "Detail", 0.f, 100.f, 1.f, 0.f);
+    bol (ids::compOut, "Comp Out", false);
     bol (ids::analogOn, "Analog On", true);
     flt (ids::sat,    "Color",  0.f, 100.f, 1.f, 0.f);
     bol (ids::stereoOn, "Stereo On", true);
@@ -93,7 +94,7 @@ MasterHeadProcessor::MasterHeadProcessor()
     prm = { P (ids::in), P (ids::specOn), P (ids::spec), P (ids::compOn), P (ids::glue), P (ids::detail),
             P (ids::analogOn), P (ids::sat), P (ids::stereoOn), P (ids::width), P (ids::bassOn), P (ids::bassHz),
             P (ids::eqOn), P (ids::low), P (ids::high), P (ids::clipOn), P (ids::clip), P (ids::limOn),
-            P (ids::push), P (ids::tp), P (ids::bypass), P (ids::target), P (ids::monitor) };
+            P (ids::push), P (ids::tp), P (ids::bypass), P (ids::target), P (ids::monitor), P (ids::compOut) };
 
     for (auto* p : getParameters()) p->addListener (this);
 }
@@ -170,6 +171,8 @@ void MasterHeadProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     }
     cUpAtk = std::exp (-1.f / (0.15f * fs));
     cUpRel = std::exp (-1.f / (0.03f * fs));
+    cMk = 1.f - std::exp (-1.f / (0.5f * fs));
+    makeupDb = 0.f;
 
     inGain.reset (sr, 0.02);   inGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (prm.in->load()));
     widthSm.reset (sr, 0.02);  widthSm.setCurrentAndTargetValue (prm.width->load() * 0.01f);
@@ -325,6 +328,7 @@ void MasterHeadProcessor::processChunk (juce::AudioBuffer<float>& b)
     const float glueN   = prm.glue->load() * 0.01f;
     const float detailN = prm.detail->load() * 0.01f;
     const bool  compOn  = prm.compOn->load() > 0.5f && (glueN > 0.001f || detailN > 0.001f);
+    const bool  compOutOn = prm.compOut->load() > 0.5f;
     const float ratio   = 1.5f + 2.5f * glueN;
     const float maxUp   = 6.f * detailN;
     constexpr float knee = 6.f;
@@ -399,6 +403,7 @@ void MasterHeadProcessor::processChunk (juce::AudioBuffer<float>& b)
             }
 
             l = r = 0.f;
+            float finSum = 0.f;
             for (int k = 0; k < 3; ++k)
             {
                 const float fin = 0.65f * bGr[k] + 0.35f * meanGr;   // liaison entre bandes
@@ -406,7 +411,12 @@ void MasterHeadProcessor::processChunk (juce::AudioBuffer<float>& b)
                 l += bl[k] * gain;  r += br[k] * gain;
                 grMax[k] = juce::jmax (grMax[k], fin);
                 upMax = juce::jmax (upMax, bUp[k]);
+                finSum += fin * (1.f / 3.f);
             }
+            // Comp Out : rattrape ~80 % de la réduction moyenne (lissé sur ~0,5 s)
+            makeupDb += ((compOutOn ? 0.8f * finSum : 0.f) - makeupDb) * cMk;
+            const float mk = juce::Decibels::decibelsToGain (makeupDb);
+            l *= mk;  r *= mk;
         }
 
         // Stereo : largeur M/S, graves mono sans déphasage (S - LP(S))
@@ -601,14 +611,23 @@ juce::AudioProcessorEditor* MasterHeadProcessor::createEditor() { return new Mas
 
 void MasterHeadProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
-    if (auto xml = apvts.copyState().createXml()) copyXmlToBinary (*xml, dest);
+    if (auto xml = apvts.copyState().createXml())
+    {
+        xml->setAttribute ("editorW", editorW);
+        xml->setAttribute ("editorH", editorH);
+        copyXmlToBinary (*xml, dest);
+    }
 }
 
 void MasterHeadProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (apvts.state.getType()))
+        {
+            editorW = xml->getIntAttribute ("editorW", 0);
+            editorH = xml->getIntAttribute ("editorH", 0);
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new MasterHeadProcessor(); }
@@ -727,7 +746,7 @@ void MasterHeadProcessor::applyAssistParams()
     pushUndo (before);
 
     auto sgn = [] (float v) { return (v >= 0 ? "+" : "") + juce::String (v, 1); };
-    assistSummary = "Mesuré : " + juce::String (result.lufs, 1) + " LUFS, PLR " + juce::String (result.plr, 1)
+    assistSummary = juce::String (juce::CharPointer_UTF8 ("Mesur\xc3\xa9 : ")) + juce::String (result.lufs, 1) + " LUFS, PLR " + juce::String (result.plr, 1)
                   + " dB, graves " + sgn (result.lowRel) + ", aigus " + sgn (result.highRel)
                   + ", side/mid " + juce::String (result.sideMid, 1) + " dB  |  Cible " + juce::String (result.targetLufs, 0)
                   + " LUFS : Spectral " + juce::String ((int) result.spec) + "%, Glue " + juce::String ((int) result.glue)

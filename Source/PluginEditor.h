@@ -122,6 +122,14 @@ private:
     juce::Slider& width;
 };
 
+// Bouton "Comp Out" (petit rond avec +), comme sur la référence
+class CompOutButton : public juce::ToggleButton
+{
+public:
+    CompOutButton() { setButtonText ("Comp Out"); }
+    void paintButton (juce::Graphics&, bool, bool) override;
+};
+
 class MonitorBar : public juce::Component
 {
 public:
@@ -143,6 +151,19 @@ public:
     void resized() override;
 
 private:
+    static constexpr int kBaseW = 800, kBaseH = 806;   // taille de conception : tout est mis à l'échelle à partir d'elle
+
+    // Toile de taille fixe, redimensionnée par une transformation (la fenêtre peut être étirée librement)
+    struct Canvas : public juce::Component
+    {
+        explicit Canvas (MasterHeadEditor& e) : ed (e) {}
+        void paint (juce::Graphics& g) override { ed.paintCanvas (g); }
+        void resized() override { ed.layoutCanvas(); }
+        MasterHeadEditor& ed;
+    };
+    void paintCanvas (juce::Graphics&);
+    void layoutCanvas();
+
     enum class Fmt { Pct, PctSigned, Db, DbSigned, DbSuffix };
     struct Knob
     {
@@ -167,9 +188,12 @@ private:
     MasterHeadProcessor& proc;
     MhLookAndFeel lnf;
     MeterData data;
+    Canvas canvas { *this };
 
     Knob kIn, kSpec, kGlue, kDetail, kColor, kWidth, kBass, kAir, kClip, kPush;
     Led lSpec, lComp, lAnalog, lStereo, lEq, lClip, lLim;
+    CompOutButton compOutBtn;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> aCompOut;
     PillToggle pLM { "LM", col::analog }, pTP { "TP", col::analog }, pBypass { "Bypass", col::bad };
     juce::TextButton btnA { "A" }, btnB { "B" }, btnAB { juce::String (juce::CharPointer_UTF8 ("A \xe2\x86\x92 B")) };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> aLM, aTP, aBypass;
